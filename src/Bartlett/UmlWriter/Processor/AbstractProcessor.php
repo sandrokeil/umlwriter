@@ -15,6 +15,7 @@
 namespace Bartlett\UmlWriter\Processor;
 
 use Bartlett\UmlWriter\Reflector\ReflectorInterface;
+use PhpParser\Node;
 
 /**
  * Abstract UML diagram processor
@@ -341,7 +342,7 @@ abstract class AbstractProcessor
      *
      * @return string
      */
-    protected function writeMethodElements($methods, $format = '%s %s()\l', $indent = -1)
+    protected function writeMethodElements($methods, $format = '%s %s()%s\l', $indent = -1)
     {
         $methodString = '';
 
@@ -361,11 +362,20 @@ abstract class AbstractProcessor
             } else {
                 $modifier = '%s';
             }
+            if ($returnType = $method->returnType()) {
+                if ($returnType instanceof Node\Name) {
+                    $returnType = $returnType->toString();
+                } elseif ($returnType instanceof Node\NullableType) {
+                    $returnType = $returnType->type . '[0..1]';
+                }
+                $returnType = ': ' . $returnType;
+            }
 
             $line = sprintf(
                 $format,
                 $visibility,
-                sprintf($modifier, $method->getShortName())
+                sprintf($modifier, $method->getShortName()),
+                $returnType
             );
             if ($indent >= 0) {
                 $methodString .= $this->formatLine($line, $indent);

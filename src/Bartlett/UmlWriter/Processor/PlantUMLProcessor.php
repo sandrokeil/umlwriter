@@ -84,7 +84,7 @@ class PlantUMLProcessor extends AbstractProcessor implements ProcessorInterface
      */
     protected function writeGraphHeader()
     {
-        return $this->formatLine('@startuml');
+        return $this->formatLine('@startuml') . $this->formatLine('!include style.iuml');
     }
 
     /**
@@ -146,7 +146,7 @@ class PlantUMLProcessor extends AbstractProcessor implements ProcessorInterface
         }
 
         // prints class methods
-        $objectString .= $this->writeMethodElements($methods, '%s%s()', $indent);
+        $objectString .= $this->writeMethodElements($methods, '%s%s()%s', $indent);
 
         $objectString .= $this->formatLine('}', --$indent);
 
