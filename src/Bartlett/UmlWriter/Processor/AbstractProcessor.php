@@ -14,6 +14,8 @@
 
 namespace Bartlett\UmlWriter\Processor;
 
+use Bartlett\Reflect\Model\ClassModel;
+use Bartlett\Reflect\Model\PropertyModel;
 use Bartlett\UmlWriter\Reflector\ReflectorInterface;
 use PhpParser\Node;
 
@@ -135,13 +137,62 @@ abstract class AbstractProcessor
      *
      * @return string
      */
-    protected function renderEdges($indent)
+    protected function renderEdges($indent=0)
     {
         $edgeString = '';
         foreach (array_unique($this->edges) as $edge) {
             $edgeString .= $this->formatLine($edge, $indent);
         }
         return $edgeString;
+    }
+
+    protected function renderRelations($properties, $indent = 0)
+    {
+        $relations = '';
+
+        /* @var $property PropertyModel */
+        foreach ($properties as $property) {
+            $class = $property->getDeclaringClass();
+            $type = null;
+            $matches = [];
+            preg_match('/\*\h+@var\h+([^\h]+)/', (string)$property->getDocComment(), $matches);
+            if (isset($matches[1])) {
+                $type = trim($matches[1]);
+//                if ($property->getDeclaringClass()) {
+//                    $type = $class->getNamespaceName();
+//                }
+            }
+            if (in_array($type, [null, 'string', 'int', 'integer', 'float', 'bool', 'boolean', 'string', 'double', 'array'], true)) {
+                continue;
+            }
+            $assoc = '0..1';
+
+            if (0 !== preg_match('/\[\]$/', $type)) {
+                $assoc = '0..*';
+            }
+
+            $type = ltrim(str_replace('[]', '', $type), '\\');
+            // TODO Prefix with namespace only if class is not from root namespace
+            $type = $this->formatClassName($class->getName() . '.' . $type);
+            $relations .= $this->formatLine(
+                $this->formatClassName($class->getName()) . ' "' . $assoc .'" --> "1" ' . $type . ': "' . $property->getName() . '"',
+                $indent
+            );
+        }
+        return $relations;
+    }
+
+    /**
+     * @param string $className
+     * @return string
+     */
+    protected function formatClassName($className)
+    {
+        $className = str_replace('\\', '.', trim($className));
+        if ('.' === $className[0]) {
+            $className = substr($className, 1);
+        }
+        return $className;
     }
 
     /**
@@ -310,6 +361,7 @@ abstract class AbstractProcessor
     {
         $propertyString = '';
 
+        /* @var $property PropertyModel */
         foreach ($properties as $property) {
             if ($property->isPrivate()) {
                 $visibility = '-';

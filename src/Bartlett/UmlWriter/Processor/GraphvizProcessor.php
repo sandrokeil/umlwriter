@@ -69,18 +69,6 @@ class GraphvizProcessor extends AbstractProcessor implements ProcessorInterface
     }
 
     /**
-     * Renders all edges (extends, implements) connecting objects
-     *
-     * @param int $indent Indent multiplier
-     *
-     * @return string
-     */
-    protected function renderEdges($indent = 1)
-    {
-        return parent::renderEdges($indent);
-    }
-
-    /**
      * Prints header of the main graph
      *
      * @return string

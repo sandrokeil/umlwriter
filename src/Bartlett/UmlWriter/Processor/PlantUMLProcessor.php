@@ -46,6 +46,7 @@ class PlantUMLProcessor extends AbstractProcessor implements ProcessorInterface
             }
             foreach ($objects as $shortName => $values) {
                 $clusterString .= $values['pre'];
+                $clusterString .= $values['relations'];
                 if ($values['undeclared']) {
                     $undeclared = true;
                 }
@@ -63,18 +64,6 @@ class PlantUMLProcessor extends AbstractProcessor implements ProcessorInterface
             }
         }
         return $clusterString;
-    }
-
-    /**
-     * Renders all edges (extends, implements) connecting objects
-     *
-     * @param int $indent Indent multiplier
-     *
-     * @return string
-     */
-    protected function renderEdges($indent = 0)
-    {
-        return parent::renderEdges($indent);
     }
 
     /**
@@ -111,6 +100,7 @@ class PlantUMLProcessor extends AbstractProcessor implements ProcessorInterface
         $properties = array(),
         $methods = array()
     ) {
+        $relations = '';
         if (empty($stereotype)) {
             $stereotype = sprintf('<< %s >>', $type);
         }
@@ -144,6 +134,9 @@ class PlantUMLProcessor extends AbstractProcessor implements ProcessorInterface
             // print separator between properties and methods or constants and methods
             $objectString .= $this->formatLine('--', $indent);
         }
+        if (count($properties)) {
+            $relations = $this->renderRelations($properties, $indent);
+        }
 
         // prints class methods
         $objectString .= $this->writeMethodElements($methods, '%s%s()%s', $indent);
@@ -152,7 +145,8 @@ class PlantUMLProcessor extends AbstractProcessor implements ProcessorInterface
 
         $this->objects[$ns][$shortName] = array(
             'undeclared' => $undeclared,
-            'pre'        => $objectString
+            'pre'        => $objectString,
+            'relations' => $relations
         );
     }
 
