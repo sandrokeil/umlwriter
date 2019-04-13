@@ -43,6 +43,8 @@ abstract class AbstractProcessor
     private $spaces    = "\t";
     private $linebreak = "\n";
 
+    protected $relations = [];
+
     /**
      * Concrete processor constructor
      *
@@ -148,21 +150,45 @@ abstract class AbstractProcessor
         return $edgeString;
     }
 
-    protected function getTypeFromDocComment(string $docComment): ?string
+    protected function getTypeFromDocComment(string $docComment = null): ?string
     {
-        $type = null;
+        if ($docComment === null) {
+            return null;
+        }
+
+        $matches = [];
         preg_match('/\*\h+@var\h+([^\h]+)/', $docComment, $matches);
         if (isset($matches[1])) {
-            $type = trim($matches[1]);
+            return trim($matches[1]);
 //                if ($property->getDeclaringClass()) {
 //                    $type = $class->getNamespaceName();
 //                }
         }
+        $matches = [];
         preg_match('/\*\h+@return\h+([^\h]+)/', $docComment, $matches);
         if (isset($matches[1])) {
-            $type = trim($matches[1]);
+            return trim($matches[1]);
         }
-        return $type;
+        return null;
+    }
+
+    protected function getTypesFromDocComment(string $docComment = null): array
+    {
+        $types = [];
+
+        if ($docComment === null) {
+            return $types;
+        }
+
+        $matches = [];
+        preg_match('/\*\h+@param\h+([^\h]+)/', $docComment, $matches);
+        if (isset($matches[1])) {
+            $number = count($matches);
+            for ($i=1; $i < $number; $i+=2) {
+                $types[] = trim($matches[$i]);
+            }
+        }
+        return $types;
     }
 
     protected function getFormattedTypeFromDocComment($returnType): string
@@ -188,7 +214,7 @@ abstract class AbstractProcessor
                     $returnType = ': Boolean';
                     break;
                 default:
-                    $returnType = ': ' . $returnType;
+                    $returnType = ': ' . ucfirst(ltrim(str_replace('\\', '.', $returnType), '.'));
                     break;
             }
         } else {
@@ -221,6 +247,12 @@ abstract class AbstractProcessor
 
             foreach ($this->reflector->getClasses() as $depClass) {
                 if (false !== strpos($depClass->getName(), $type)) {
+                    if (true === in_array($depClass, $this->relations, true)) {
+                        $formattedType = $this->formatClassName($depClass->getName());
+                        $found= true;
+                        break;
+                    }
+                    $this->relations[] = $depClass;
                     $this->writeObjectElement($depClass);
                     $formattedType = $this->formatClassName($depClass->getName());
                     $found= true;
@@ -247,10 +279,10 @@ abstract class AbstractProcessor
     protected function formatClassName($className)
     {
         $className = str_replace('\\', '.', trim($className));
-        if ('.' === $className[0]) {
-            $className = substr($className, 1);
-        }
-        return $className;
+//        if ('.' === $className[0]) {
+//            $className = substr($className, 1);
+//        }
+        return ltrim($className, '.');
     }
 
     /**
@@ -477,9 +509,15 @@ abstract class AbstractProcessor
             }
 
             if ($method->getNumberOfParameters() > 0) {
+                $types = $this->getTypesFromDocComment($method->getDocComment());
                 /* @var $parameter ParameterModel */
-                foreach ($method->getParameters() as $parameter) {
-                    $params[] = $parameter->getName() . ': ' . $parameter->getTypeHint();
+                foreach ($method->getParameters() as $key => $parameter) {
+                    $type = $parameter->getTypeHint() ?: ($types[$key] ?? null);
+                    if ($type) {
+                        $params[] = $parameter->getName() . $this->getFormattedTypeFromDocComment($type);
+                    } else {
+                        $params[] = $parameter->getName();
+                    }
                 }
             }
             $line = sprintf(
