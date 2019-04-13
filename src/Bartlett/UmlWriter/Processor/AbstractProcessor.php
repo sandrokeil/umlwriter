@@ -15,6 +15,8 @@
 namespace Bartlett\UmlWriter\Processor;
 
 use Bartlett\Reflect\Model\ClassModel;
+use Bartlett\Reflect\Model\MethodModel;
+use Bartlett\Reflect\Model\ParameterModel;
 use Bartlett\Reflect\Model\PropertyModel;
 use Bartlett\UmlWriter\Reflector\ReflectorInterface;
 use PhpParser\Node;
@@ -146,6 +148,55 @@ abstract class AbstractProcessor
         return $edgeString;
     }
 
+    protected function getTypeFromDocComment(string $docComment): ?string
+    {
+        $type = null;
+        preg_match('/\*\h+@var\h+([^\h]+)/', $docComment, $matches);
+        if (isset($matches[1])) {
+            $type = trim($matches[1]);
+//                if ($property->getDeclaringClass()) {
+//                    $type = $class->getNamespaceName();
+//                }
+        }
+        preg_match('/\*\h+@return\h+([^\h]+)/', $docComment, $matches);
+        if (isset($matches[1])) {
+            $type = trim($matches[1]);
+        }
+        return $type;
+    }
+
+    protected function getFormattedTypeFromDocComment($returnType): string
+    {
+        if ($returnType) {
+            if ($returnType instanceof Node\Name) {
+                $returnType = $returnType->toString();
+            } elseif ($returnType instanceof Node\NullableType) {
+                $returnType = $returnType->type . '[0..1]';
+            }
+
+            switch ($returnType) {
+                case 'void':
+                    $returnType = '';
+                    break;
+                case 'string':
+                    $returnType = ': ' . ucfirst($returnType);
+                    break;
+                case 'int':
+                    $returnType = ': Integer';
+                    break;
+                case 'bool':
+                    $returnType = ': Boolean';
+                    break;
+                default:
+                    $returnType = ': ' . $returnType;
+                    break;
+            }
+        } else {
+            $returnType = '';
+        }
+        return $returnType;
+    }
+
     protected function renderRelations($properties, $indent = 0)
     {
         $relations = '';
@@ -153,15 +204,8 @@ abstract class AbstractProcessor
         /* @var $property PropertyModel */
         foreach ($properties as $property) {
             $class = $property->getDeclaringClass();
-            $type = null;
-            $matches = [];
-            preg_match('/\*\h+@var\h+([^\h]+)/', (string)$property->getDocComment(), $matches);
-            if (isset($matches[1])) {
-                $type = trim($matches[1]);
-//                if ($property->getDeclaringClass()) {
-//                    $type = $class->getNamespaceName();
-//                }
-            }
+            $type = $this->getTypeFromDocComment($property->getDocComment());
+
             if (in_array($type, [null, 'string', 'int', 'integer', 'float', 'bool', 'boolean', 'string', 'double', 'array'], true)) {
                 continue;
             }
@@ -171,13 +215,27 @@ abstract class AbstractProcessor
                 $assoc = '0..*';
             }
 
+            $found= false;
             $type = ltrim(str_replace('[]', '', $type), '\\');
-            // TODO Prefix with namespace only if class is not from root namespace
-            $type = $this->formatClassName($class->getName() . '.' . $type);
+            $formattedType = $this->formatClassName($class->getName() . '.' . $type);
+
+            foreach ($this->reflector->getClasses() as $depClass) {
+                if (false !== strpos($depClass->getName(), $type)) {
+                    $this->writeObjectElement($depClass);
+                    $formattedType = $this->formatClassName($depClass->getName());
+                    $found= true;
+                    break;
+                }
+            }
+            if ($found === false) {
+                continue;
+            }
+
             $relations .= $this->formatLine(
-                $this->formatClassName($class->getName()) . ' "' . $assoc .'" --> "1" ' . $type . ': "' . $property->getName() . '"',
+                $this->formatClassName($class->getName()) . ' "' . $assoc .'" --> "1" ' . $formattedType . ': "' . $property->getName() . '"',
                 $indent
             );
+
         }
         return $relations;
     }
@@ -374,7 +432,7 @@ abstract class AbstractProcessor
             $line = sprintf(
                 $format,
                 $visibility,
-                $property->getName()
+                $property->getName() . $this->getFormattedTypeFromDocComment($this->getTypeFromDocComment($property->getDocComment()))
             );
             if ($indent >= 0) {
                 $propertyString .= $this->formatLine($line, $indent);
@@ -394,11 +452,14 @@ abstract class AbstractProcessor
      *
      * @return string
      */
-    protected function writeMethodElements($methods, $format = '%s %s()%s\l', $indent = -1)
+    protected function writeMethodElements($methods, $format = '%s %s(%s)%s\l', $indent = -1)
     {
         $methodString = '';
 
+        /* @var $method MethodModel */
         foreach ($methods as $method) {
+            $params = [];
+
             if ($method->isPrivate()) {
                 $visibility = '-';
             } elseif ($method->isProtected()) {
@@ -414,20 +475,19 @@ abstract class AbstractProcessor
             } else {
                 $modifier = '%s';
             }
-            if ($returnType = $method->returnType()) {
-                if ($returnType instanceof Node\Name) {
-                    $returnType = $returnType->toString();
-                } elseif ($returnType instanceof Node\NullableType) {
-                    $returnType = $returnType->type . '[0..1]';
-                }
-                $returnType = ': ' . $returnType;
-            }
 
+            if ($method->getNumberOfParameters() > 0) {
+                /* @var $parameter ParameterModel */
+                foreach ($method->getParameters() as $parameter) {
+                    $params[] = $parameter->getName() . ': ' . $parameter->getTypeHint();
+                }
+            }
             $line = sprintf(
                 $format,
                 $visibility,
                 sprintf($modifier, $method->getShortName()),
-                $returnType
+                implode(', ', $params),
+                $this->getFormattedTypeFromDocComment($this->getTypeFromDocComment($method->getDocComment() ?: '') ?: $method->returnType())
             );
             if ($indent >= 0) {
                 $methodString .= $this->formatLine($line, $indent);

@@ -139,7 +139,7 @@ class PlantUMLProcessor extends AbstractProcessor implements ProcessorInterface
         }
 
         // prints class methods
-        $objectString .= $this->writeMethodElements($methods, '%s%s()%s', $indent);
+        $objectString .= $this->writeMethodElements($methods, '%s%s(%s)%s', $indent);
 
         $objectString .= $this->formatLine('}', --$indent);
 
