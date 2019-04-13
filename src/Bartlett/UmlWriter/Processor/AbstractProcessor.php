@@ -45,6 +45,8 @@ abstract class AbstractProcessor
 
     protected $relations = [];
 
+    protected $currentNamespace;
+
     /**
      * Concrete processor constructor
      *
@@ -77,9 +79,10 @@ abstract class AbstractProcessor
     {
         $this->reset();
 
-        $this->writeObjectElement(
-            $this->reflector->getClass($className)
-        );
+        $class = $this->reflector->getClass($className);
+        $this->setCurrentNamespace($class->getNamespaceName());
+
+        $this->writeObjectElement($class);
         return $this->render();
     }
 
@@ -91,6 +94,7 @@ abstract class AbstractProcessor
         $this->reset();
 
         foreach ($this->reflector->getNamespace($namespaceName) as $object) {
+            $this->setCurrentNamespace($namespaceName);
             $this->writeObjectElement($object);
         }
         return $this->render();
@@ -110,10 +114,12 @@ abstract class AbstractProcessor
 
             foreach ($this->reflector->getClasses() as $class) {
                 $ns = $class->getNamespaceName();
+
                 if (in_array($ns, $namespaces)) {
                     continue;
                 }
                 $namespaces[] = $ns;
+                $this->setCurrentNamespace($ns);
 
                 // proceed objects of a same namespace
                 foreach ($this->reflector->getNamespace($ns) as $object) {
@@ -213,6 +219,9 @@ abstract class AbstractProcessor
                 case 'bool':
                     $returnType = ': Boolean';
                     break;
+                case 'array':
+                    $returnType = ': array';
+                    break;
                 default:
                     $returnType = ': ' . ucfirst(ltrim(str_replace('\\', '.', $returnType), '.'));
                     break;
@@ -220,7 +229,7 @@ abstract class AbstractProcessor
         } else {
             $returnType = '';
         }
-        return $returnType;
+        return str_replace($this->currentNamespace, '', $returnType);
     }
 
     protected function renderRelations($properties, $indent = 0)
@@ -584,5 +593,10 @@ abstract class AbstractProcessor
     {
         $this->objects = array();
         $this->edges   = array();
+    }
+
+    private function setCurrentNamespace(string $ns)
+    {
+        $this->currentNamespace = $this->formatClassName($ns) . '.';
     }
 }
