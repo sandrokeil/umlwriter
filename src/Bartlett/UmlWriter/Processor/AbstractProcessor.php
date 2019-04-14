@@ -463,11 +463,11 @@ abstract class AbstractProcessor
         /* @var $property PropertyModel */
         foreach ($properties as $property) {
             if ($property->isPrivate()) {
-                $visibility = '-';
+                $visibility = '- ';
             } elseif ($property->isProtected()) {
-                $visibility = '#';
+                $visibility = '# ';
             } else {
-                $visibility = '+';
+                $visibility = '+ ';
             }
 
             $line = sprintf(
@@ -502,11 +502,11 @@ abstract class AbstractProcessor
             $params = [];
 
             if ($method->isPrivate()) {
-                $visibility = '-';
+                $visibility = '- ';
             } elseif ($method->isProtected()) {
-                $visibility = '#';
+                $visibility = '# ';
             } else {
-                $visibility = '+';
+                $visibility = '+ ';
             }
 
             if ($method->isStatic()) {
